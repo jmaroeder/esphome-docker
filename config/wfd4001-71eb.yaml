@@ -1,0 +1,15 @@
+esphome:
+  name: wfd4001-71eb
+  friendly_name: WFD4001-71eb
+
+packages:
+  wfd4001: !include
+    file: common/wfd4001.yaml
+    vars:
+      component: fan
+      component_friendly_name: Fan
+
+  wifi: !include
+    file: common/wifi.yaml
+    vars:
+      static_ip: 192.168.2.24

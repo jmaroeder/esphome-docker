@@ -1,0 +1,10 @@
+esphome:
+  name: wfd4001-ee7d
+  friendly_name: WFD4001-ee7d
+
+packages:
+  wfd4001: !include common/wfd4001.yaml
+  wifi: !include
+    file: common/wifi.yaml
+    vars:
+      static_ip: 192.168.2.21

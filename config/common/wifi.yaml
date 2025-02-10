@@ -1,0 +1,22 @@
+defaults:
+  static_ip: 192.168.3.99
+
+api:
+
+captive_portal:
+
+logger:
+
+ota:
+  - platform: esphome
+
+wifi:
+  networks:
+  - ssid: !secret wifi_ssid
+    password: !secret wifi_password
+    # bssid: !secret wifi_bssid
+    manual_ip:
+      gateway: !secret ip_gateway
+      subnet: !secret ip_subnet
+      static_ip: ${static_ip}
+  power_save_mode: NONE
