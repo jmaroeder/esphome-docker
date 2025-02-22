@@ -4,7 +4,4 @@ esphome:
 
 packages:
   wfd4001: !include common/wfd4001.yaml
-  wifi: !include
-    file: common/wifi.yaml
-    vars:
-      static_ip: 192.168.2.21
+  wifi: !include common/wifi-dhcp.yaml

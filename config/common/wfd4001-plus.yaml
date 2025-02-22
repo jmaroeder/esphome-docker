@@ -1,0 +1,399 @@
+defaults:
+  component: light
+  component_friendly_name: Light
+
+substitutions:
+  factory_reset_boot_count_trigger: "5"
+
+wifi:
+  id: wifi_component
+  ap:
+    ap_timeout: 0s
+  reboot_timeout: 0s
+
+captive_portal:
+
+esphome:
+  on_boot:
+    - priority: 600.0
+      then:
+        - script.execute: boot_factory_reset
+    - priority: 0.0
+      then:
+        - script.execute: boot_update_state
+    - priority: -100.0
+      then:
+        - event.trigger:
+            id: up_button_event
+            event_type: idle
+        - event.trigger:
+            id: down_button_event
+            event_type: idle
+
+bk72xx:
+  board: wb3s
+
+globals:
+  - id: up_count
+    type: short
+  - id: up_last_millis
+    type: unsigned long
+  - id: down_count
+    type: short
+  - id: down_last_millis
+    type: unsigned long
+  - id: last_state
+    type: bool
+    initial_value: 'true'
+    restore_value: true
+  - id: fast_boot
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: inited
+    type: bool
+    initial_value: 'false'
+
+switch:
+  - platform: template
+    id: immediate_mode
+    name: Immediate mode
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    entity_category: config
+  - platform: template
+    id: smart_bulb_mode
+    name: Smart bulb mode
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    on_turn_on:
+      then:
+        - lambda: "id(_on_smart_bulb_mode_change)->execute(true);"
+    on_turn_off:
+      then:
+        - lambda: "id(_on_smart_bulb_mode_change)->execute(false);"
+    entity_category: config
+  - platform: template
+    id: invert_switch
+    name: Invert switch
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    entity_category: config
+
+button:
+  - platform: factory_reset
+    id: factory_reset_button
+    name: "ESPHome: Factory reset"
+
+number:
+  - platform: template
+    id: button_delay
+    name: Button delay
+    unit_of_measurement: ms
+    initial_value: 300
+    restore_value: true
+    min_value: 0
+    max_value: 1000
+    step: 50
+    optimistic: true
+    entity_category: config
+  - platform: template
+    id: long_press
+    name: Long press duration
+    unit_of_measurement: ms
+    initial_value: 500
+    restore_value: true
+    min_value: 0
+    max_value: 2000
+    step: 50
+    optimistic: true
+    entity_category: config
+  - platform: template
+    id: event_hold
+    name: Event hold duration
+    unit_of_measurement: ms
+    initial_value: 1000
+    restore_value: true
+    min_value: 0
+    max_value: 10000
+    step: 500
+    optimistic: true
+    entity_category: config
+
+select:
+  - platform: template
+    id: start_up_behavior
+    name: Start-up behavior
+    optimistic: true
+    initial_option: PreviousValue
+    restore_value: true
+    options:
+      - 'off'
+      - 'on'
+      - toggle
+      - PreviousValue
+    entity_category: config
+
+event:
+  - platform: template
+    id: up_button_event
+    name: Up Button
+    event_types:
+      - idle
+      - click
+      - double_click
+      - triple_click
+      - quadruple_click
+      - long_press
+  - platform: template
+    id: down_button_event
+    name: Down Button
+    event_types:
+      - idle
+      - click
+      - double_click
+      - triple_click
+      - quadruple_click
+      - long_press
+
+script:
+  - id: boot_update_state
+    then:
+      - lambda: |-
+          auto TAG = "script.boot_update_state";
+          ESP_LOGD(TAG, "start_up_behavior.c_str: %s", id(start_up_behavior).state.c_str());
+          if (strcmp(id(start_up_behavior).state.c_str(), "off") == 0) {
+            ESP_LOGD(TAG, "start_up_behavior: off");
+            id(last_state) = false;
+          } else if (strcmp(id(start_up_behavior).state.c_str(), "on") == 0) {
+            ESP_LOGD(TAG, "start_up_behavior: on");
+            id(last_state) = true;
+          } else {
+            if (strcmp(id(start_up_behavior).state.c_str(), "toggle") == 0) {
+              ESP_LOGD(TAG, "start_up_behavior: toggle");
+              id(last_state) = !id(last_state);
+            } else {
+              ESP_LOGD(TAG, "start_up_behavior: PreviousValue");
+              // PreviousValue: leave it be
+            }
+          }
+          id(inited) = true;
+          if (id(last_state)) {
+            id(${component}_1).turn_on().perform();
+          } else {
+            id(${component}_1).turn_off().perform();
+          }
+  - id: boot_factory_reset
+    then:
+      - if:
+          condition:
+            lambda: return ( id(fast_boot) >= ${factory_reset_boot_count_trigger});
+          then:
+            - lambda: |-
+                ESP_LOGD("script.boot_factory_reset", "Performing factory reset");
+                id(fast_boot) = 0;
+                fast_boot->loop();
+                global_preferences->sync();
+            - button.press: factory_reset_button
+      - lambda: |-
+          if(id(fast_boot) > 0)
+            ESP_LOGD("script.boot_factory_reset", "Quick reboot %d/%d, do it %d more times to factory reset", id(fast_boot), ${factory_reset_boot_count_trigger}, ${factory_reset_boot_count_trigger} - id(fast_boot));
+          id(fast_boot) += 1;
+          fast_boot->loop();
+          global_preferences->sync();
+      - delay: 10s
+      - lambda: |-
+          id(fast_boot) = 0;
+          fast_boot->loop();
+          global_preferences->sync();
+  - id: _on_press
+    parameters:
+      is_down: bool
+    mode: restart
+    then:
+      - lambda: |-
+          auto TAG = "script._on_press_1";
+          if (id(invert_switch).state) {
+            is_down = !is_down;
+          }
+          ESP_LOGD(TAG, "press %s", is_down ? "down" : "up");
+          short *count = is_down ? &id(down_count) : &id(up_count);
+          unsigned long *last_millis = is_down ? &id(down_last_millis) : &id(up_last_millis);
+          unsigned long now = esphome::millis();
+          if (now <= *last_millis + id(button_delay).state) {
+            *count = *count + 1;
+          } else {
+            *count = 1;
+          }
+          ESP_LOGD(TAG, "count: %d, last_millis: %d, now: %d", *count, *last_millis, now);
+          *last_millis = now;
+          if (id(immediate_mode).state && *count > 0) {
+            auto button_event = is_down ? id(down_button_event) : id(up_button_event);
+            switch (*count) {
+              case 1:
+                if (is_down) {
+                  id(${component}_1).turn_off().perform();
+                } else {
+                  id(${component}_1).turn_on().perform();
+                }
+                button_event->trigger("click");
+                break;
+              case 2:
+                button_event->trigger("double_click");
+                break;
+              case 3:
+                button_event->trigger("triple_click");
+                break;
+              case 4:
+                button_event->trigger("quadruple_click");
+                break;
+            }
+          }
+      - delay: !lambda "return id(button_delay).state;"
+      - lambda: |-
+          auto TAG = "script._on_press_2";
+          if (id(invert_switch).state) {
+            is_down = !is_down;
+          }
+          ESP_LOGD(TAG, "first delay %s", is_down ? "down" : "up");
+          short *count = is_down ? &id(down_count) : &id(up_count);
+          auto button = is_down ? id(down_button) : id(up_button);
+
+          if (!id(immediate_mode).state && *count > 0 && !button->state) {
+            auto button_event = is_down ? id(down_button_event) : id(up_button_event);
+            switch (*count) {
+              case 1:
+                if (is_down) {
+                  id(${component}_1).turn_off().perform();
+                } else {
+                  id(${component}_1).turn_on().perform();
+                }
+                button_event->trigger("click");
+                break;
+              case 2:
+                button_event->trigger("double_click");
+                break;
+              case 3:
+                button_event->trigger("triple_click");
+                break;
+              case 4:
+                button_event->trigger("quadruple_click");
+                break;
+            }
+          }
+      - delay: !lambda "return id(long_press).state - id(button_delay).state;"
+      - lambda: |-
+          auto TAG = "script._on_press_3";
+          if (id(invert_switch).state) {
+            is_down = !is_down;
+          }
+          ESP_LOGD(TAG, "second delay %s", is_down ? "down" : "up");
+          auto button = is_down ? id(down_button) : id(up_button);
+          if (button->state) {
+            auto button_event = is_down ? id(down_button_event) : id(up_button_event);
+            button_event->trigger("long_press");
+          }
+  - id: _on_release
+    parameters:
+      is_down: bool
+    mode: restart
+    then:
+      - lambda: |-
+          auto TAG = "script._on_release";
+          if (id(invert_switch).state) {
+            is_down = !is_down;
+          }
+          ESP_LOGD(TAG, "release %s", is_down ? "down" : "up");
+      - delay: !lambda "return id(event_hold).state;"
+      - lambda: |-
+          if (id(invert_switch).state) {
+            is_down = !is_down;
+          }
+          auto button_event = is_down ? id(down_button_event) : id(up_button_event);
+          button_event->trigger("idle");
+  - id: update_state
+    parameters:
+      input_state: bool
+    then:
+      - lambda: |-
+          auto TAG = "update_state";
+          id(last_state) = input_state;
+          ESP_LOGD(TAG, "input_state %b, smart bulb mode %b", input_state, id(smart_bulb_mode).state);
+          if (id(smart_bulb_mode).state || input_state) {
+            id(relay_1).turn_on();
+          } else {
+            id(relay_1).turn_off();
+          }
+  - id: _on_smart_bulb_mode_change
+    parameters:
+      enabled: bool
+    then:
+      - lambda: |-
+          if (!id(inited)) {
+            ESP_LOGD("_on_smart_bulb_mode_change", "not inited");
+            return;
+          }
+          id(update_state)->execute(id(last_state));
+
+binary_sensor:
+  - platform: status
+    id: status_1
+
+  - platform: gpio
+    id: up_button
+    pin:
+      number: P8
+      inverted: true
+    on_press:
+      then:
+        - lambda: "id(_on_press)->execute(false);"
+    on_release:
+      then:
+        - lambda: "id(_on_release)->execute(false);"
+
+  - platform: gpio
+    id: down_button
+    pin:
+      number: P9
+      inverted: true
+    on_press:
+      then:
+        - lambda: "id(_on_press)->execute(true);"
+    on_release:
+      then:
+        - lambda: "id(_on_release)->execute(true);"
+
+  - platform: gpio
+    id: reset_button
+    pin:
+      number: P6
+      inverted: true
+  - platform: gpio
+    id: p7
+    pin: P7
+
+${component}:
+  - platform: binary
+    id: ${component}_1
+    name: ${component_friendly_name}
+    output: template_output_1
+
+output:
+  - platform: gpio
+    id: relay_1
+    pin: P26
+  - platform: template
+    id: template_output_1
+    type: binary
+    write_action:
+      - lambda: |-
+          auto TAG = "template_output_1";
+          ESP_LOGD(TAG, "write_action, state: %s", state ? "true" : "false");
+          if (!id(inited)) {
+            ESP_LOGD(TAG, "not inited, not modifying");
+            return;
+          }
+          id(update_state)->execute(state);
+
+status_led:
+  pin: P24
