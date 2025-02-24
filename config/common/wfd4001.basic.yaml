@@ -1,0 +1,191 @@
+defaults:
+  component: light
+  component_friendly_name: Light
+  click_min_length_ms: '1'
+  click_max_length_ms: '350'
+  multi_click_delay_ms: '250'
+  multi_click_end_ms: '300'
+  long_press_ms: '500'
+  event_hold_ms: '1000'
+
+bk72xx:
+  board: wb3s
+
+output:
+  - platform: gpio
+    pin: P26
+    id: relay_1
+
+${component}:
+  - platform: binary
+    id: ${component}_1
+    name: ${component_friendly_name}
+    output: relay_1
+    restore_mode: RESTORE_DEFAULT_ON
+
+event:
+  - platform: template
+    id: up_button_event
+    name: Up Button
+    # device_class: button
+    event_types:
+      - idle
+      - click
+      - double_click
+      - triple_click
+      - long_press
+  - platform: template
+    id: down_button_event
+    name: Down Button
+    # device_class: button
+    event_types:
+      - idle
+      - click
+      - double_click
+      - triple_click
+      - long_press
+
+esphome:
+  on_boot:
+    priority: 200
+    then:
+      - event.trigger:
+          id: up_button_event
+          event_type: idle
+      - event.trigger:
+          id: down_button_event
+          event_type: idle
+
+binary_sensor:
+  - platform: status
+    id: status_1
+  - platform: gpio
+    id: up_button
+    pin:
+      number: P8
+      inverted: true
+    on_press:
+      then:
+        - ${component}.turn_on: ${component}_1
+    on_multi_click:
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: up_button_event
+              event_type: triple_click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: up_button_event
+              event_type: idle
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: up_button_event
+              event_type: double_click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: up_button_event
+              event_type: idle
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: up_button_event
+              event_type: click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: up_button_event
+              event_type: idle
+      - timing:
+          - ON for at least ${long_press_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: up_button_event
+              event_type: long_press
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: up_button_event
+              event_type: idle
+  - platform: gpio
+    id: down_button
+    pin:
+      number: P9
+      inverted: true
+    on_press:
+      then:
+        - ${component}.turn_off: ${component}_1
+    on_multi_click:
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: down_button_event
+              event_type: triple_click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: down_button_event
+              event_type: idle
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at most ${multi_click_delay_ms}ms
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: down_button_event
+              event_type: double_click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: down_button_event
+              event_type: idle
+      - timing:
+          - ON for ${click_min_length_ms}ms to ${click_max_length_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: down_button_event
+              event_type: click
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: down_button_event
+              event_type: idle
+      - timing:
+          - ON for at least ${long_press_ms}ms
+          - OFF for at least ${multi_click_end_ms}ms
+        then:
+          - event.trigger:
+              id: down_button_event
+              event_type: long_press
+          - delay: ${event_hold_ms}ms
+          - event.trigger:
+              id: down_button_event
+              event_type: idle
+  - platform: gpio
+    id: reset_button
+    pin:
+      number: P6
+      inverted: true
+  - platform: gpio
+    id: p7
+    pin: P7
+
+status_led:
+  pin: P24
+

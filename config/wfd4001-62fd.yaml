@@ -3,5 +3,5 @@ esphome:
   friendly_name: WFD4001-62fd
 
 packages:
-  wfd4001: !include common/wfd4001-plus.yaml
+  wfd4001: !include common/wfd4001.yaml
   wifi: !include common/wifi-dhcp.yaml
